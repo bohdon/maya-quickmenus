@@ -1,0 +1,1 @@
++ maya-quickmenus 1.0 ./quickmenus
