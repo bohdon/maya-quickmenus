@@ -4,9 +4,15 @@ import os
 import pymel.core as pm
 
 __all__ = [
+    "buildMenus",
+    "destroyMenus",
+    "getAllRegisteredMenus",
     "getHotkeyKwargs",
+    "getRegisteredMenus",
+    "registerMenu",
     "registerMenuHotkeys",
     "removeMenuHotkeys",
+    "unregisterMenu",
 ]
 
 BUILD_MENU_CMD = """
@@ -19,10 +25,10 @@ except:
     {secondary}
 """
 
-REMOVE_MENU_CMD = """
+DESTROY_MENU_CMD = """
 try:
     import quickmenus
-    wasInvoked = quickmenus.removeMenus('{menuName}')
+    wasInvoked = quickmenus.destroyMenus()
 except:
     pass
 else:
@@ -30,6 +36,17 @@ else:
         {secondary}
 """
 
+# all menus that have been registered,
+# stored as a list of classes indexed by menu name
+REGISTERED_MENUS = {}
+
+# list of any active marking menus that
+# can / should be destroyed when menu key is released
+ACTIVE_MENUS = []
+
+
+# Hotkey Utils
+# ------------
 
 def getHotkeyKwargs(keyString):
     """
@@ -89,26 +106,26 @@ def registerMenuHotkeys(menuName, hotkey, preBuildCmd=None, secondaryCmd=None, a
 
     # create run time commands
     buildCmd = BUILD_MENU_CMD.format(menuName=menuName, preBuild=preBuildCmd, secondary=secondaryCmd)
-    removeCmd = REMOVE_MENU_CMD.format(menuName=menuName, preBuild=preBuildCmd, secondary=secondaryCmd)
+    destroyCmd = DESTROY_MENU_CMD.format(menuName=menuName, preBuild=preBuildCmd, secondary=secondaryCmd)
 
     buildRtCmdId = rtCmdIdFmt.format("build", menuName)
     if pm.runTimeCommand(buildRtCmdId, q=True, ex=True):
         pm.runTimeCommand(buildRtCmdId, e=True, delete=True)
     pm.runTimeCommand(buildRtCmdId, c=buildCmd, **runTimeKwargs)
 
-    buildNamedCmdId = namedCmdIdFmt.format("build", menuName)
-    pm.nameCommand(buildNamedCmdId, c=buildRtCmdId, ann=buildRtCmdId + " Named Command")
+    buildNameCmdId = namedCmdIdFmt.format("build", menuName)
+    pm.nameCommand(buildNameCmdId, c=buildRtCmdId, ann=buildRtCmdId + " Named Command")
 
-    removeRtCmdId = rtCmdIdFmt.format("remove", menuName)
-    if pm.runTimeCommand(removeRtCmdId, q=True, ex=True):
-        pm.runTimeCommand(removeRtCmdId, e=True, delete=True)
-    pm.runTimeCommand(removeRtCmdId, c=removeCmd, **runTimeKwargs)
+    destroyRtCmdId = rtCmdIdFmt.format("destroy", menuName)
+    if pm.runTimeCommand(destroyRtCmdId, q=True, ex=True):
+        pm.runTimeCommand(destroyRtCmdId, e=True, delete=True)
+    pm.runTimeCommand(destroyRtCmdId, c=destroyCmd, **runTimeKwargs)
 
-    removeNamedCmdId = namedCmdIdFmt.format("remove", menuName)
-    pm.nameCommand(removeNamedCmdId, c=removeRtCmdId, ann=removeRtCmdId + " Named Command")
+    destroyNameCmdId = namedCmdIdFmt.format("destroy", menuName)
+    pm.nameCommand(destroyNameCmdId, c=destroyRtCmdId, ann=destroyRtCmdId + " Named Command")
 
-    pm.hotkey(name=buildNamedCmdId, **keyKwargs)
-    pm.hotkey(releaseName=removeNamedCmdId, **keyKwargs)
+    pm.hotkey(name=buildNameCmdId, **keyKwargs)
+    pm.hotkey(releaseName=destroyNameCmdId, **keyKwargs)
 
 
 def removeMenuHotkeys(menuName, hotkey):
@@ -128,20 +145,160 @@ def removeMenuHotkeys(menuName, hotkey):
     if pm.runTimeCommand(buildRtCmdId, q=True, ex=True):
         pm.runTimeCommand(buildRtCmdId, e=True, delete=True)
 
-    removeRtCmdId = rtCmdIdFmt.format("remove", menuName)
-    if pm.runTimeCommand(removeRtCmdId, q=True, ex=True):
-        pm.runTimeCommand(removeRtCmdId, e=True, delete=True)
+    destroyRtCmdId = rtCmdIdFmt.format("destroy", menuName)
+    if pm.runTimeCommand(destroyRtCmdId, q=True, ex=True):
+        pm.runTimeCommand(destroyRtCmdId, e=True, delete=True)
 
     # clear hotkeys if set
-    buildNamedCmdId = namedCmdIdFmt.format("build", menuName)
-    removeNamedCmdId = namedCmdIdFmt.format("remove", menuName)
+    buildNameCmdId = namedCmdIdFmt.format("build", menuName)
+    destroyNameCmdId = namedCmdIdFmt.format("destroy", menuName)
     keyQueryKwargs = keyKwargs.copy()
     key = keyQueryKwargs.pop('k')
-    if pm.hotkey(key, query=True, name=True, **keyQueryKwargs) == buildNamedCmdId:
+    if pm.hotkey(key, query=True, name=True, **keyQueryKwargs) == buildNameCmdId:
         pm.hotkey(name="", **keyKwargs)
-    if pm.hotkey(key, query=True, releaseName=True, **keyQueryKwargs) == removeNamedCmdId:
+    if pm.hotkey(key, query=True, releaseName=True, **keyQueryKwargs) == destroyNameCmdId:
         pm.hotkey(releaseName="", **keyKwargs)
 
 
+
+# Building / Destroying Menus
+# ---------------------------
+
+def buildMenus(menuName):
+    """
+    Build any marking menus that were registered for a menu name.
+
+    Args:
+        menuName: A string name of the registered marking menu
+    """
+    # perform destroy before building because sometimes
+    # the release-hotkey gets skipped if the current
+    # key modifiers change while the menu is active
+    destroyMenus()
+
+    # find any registered menus by name
+    classes = getRegisteredMenus(menuName)
+    for menuCls in classes:
+        inst = menuCls()
+        if inst.shouldBuild():
+            ACTIVE_MENUS.append(inst)
+            inst.build()
+
+
+def destroyMenus():
+    """
+    Destroy any marking menus that are currently built.
+
+    Returns:
+        True if any of the menus that were destroyed were
+        shown at least once.
+    """
+    wasAnyInvoked = False
+    
+    global ACTIVE_MENUS
+    for m in ACTIVE_MENUS:
+        wasAnyInvoked = wasAnyInvoked or m.wasInvoked
+        m.destroy()
+    ACTIVE_MENUS = []
+
+    return wasAnyInvoked
+
+
+
+# Menu Registration
+# -----------------
+
+def registerMenu(menuName, cls):
+    """
+    Register a MarkingMenu class by name
+
+    Args:
+        menuName: A string name of the registered marking menu
+        cls: A MarkingMenu subclass to register for being built later
+    """
+    global REGISTERED_MENUS
+    # get existing list of registered menus of same name
+    existing = REGISTERED_MENUS.get(menuName, [])
+    # prevent duplicates
+    REGISTERED_MENUS[menuName] = list(set(existing + [cls]))
+
+
+def unregisterMenu(menuName, cls=None, all=False):
+    """
+    Unregister a MarkingMenu that was previously registered by name.
+
+    Args:
+        menuName: A string name of the registered marking menu
+        cls: A MarkingMenu subclass to unregister
+        all: A bool, when True, all menus registered with the given
+            menu name are unregistered.
+    """
+    if not cls and not all:
+        raise ValueError("`cls` argument must be given when not unregistering all menus")
+    global REGISTERED_MENUS
+    if menuName in REGISTERED_MENUS:
+        if all:
+            REGISTERED_MENUS[menuName] = []
+        elif cls in REGISTERED_MENUS[menuName]:
+            REGISTERED_MENUS[menuName].remove(cls)
+        # remove list if empty
+        if not REGISTERED_MENUS[menuName]:
+            del REGISTERED_MENUS[menuName]
+
+
+def getRegisteredMenus(menuName):
+    """
+    Return the menu class that is registered under
+    the given name
+
+    Args:
+        menuName: A string name of the registered marking menu
+    """
+    global REGISTERED_MENUS
+    if menuName in REGISTERED_MENUS:
+        return REGISTERED_MENUS[menuName][:]
+
+
+def getAllRegisteredMenus():
+    """
+    Return all registered menus
+    """
+    global REGISTERED_MENUS
+    return REGISTERED_MENUS.items()
+
+
+
+
+class MarkingMenu(object):
+    """
+    The base class for any quick marking menu that can
+    be registered.
+    """
+
+    def __init__(self, menu, obj=None):
+        self.menu = pm.ui.Menu(menu)
+        self.object = obj
+        self.hit = bool(pm.mel.dagObjectHit())
+        # variable to keep track of if this menu ever showed
+        self.wasInvoked = False
+
+    def shouldBuild(self):
+        """
+        Override to implement custom logic for whether or not this
+        menu should be built
+        """
+        return True
+
+    def build(self):
+        """
+        Build a custom menu
+        """
+        pass
+
+    def destroy(self):
+        """
+        Remove and destroy this menu
+        """
+        pass
 
 
