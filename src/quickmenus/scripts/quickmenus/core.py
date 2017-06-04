@@ -60,6 +60,28 @@ ACTIVE_MENUS = []
 # Hotkey Management
 # -----------------
 
+def _switchToNonDefaultHotkeySet():
+    if not hasattr(pm, 'hotkeySet'):
+        return
+    current = pm.hotkeySet(q=True, cu=True)
+    if current == 'Maya_Default':
+        existing = pm.hotkeySet(q=True, hotkeySetArray=True)
+        if 'Maya_Default_Duplicate' in existing:
+            # use the common duplicated set
+            pm.hotkeySet('Maya_Default_Duplicate', e=True, cu=True)
+            LOG.info("Switched to hotkey set: Maya_Default_Duplicate")
+        elif len(existing) > 1:
+            # there are other sets, but not with known names
+            for e in existing:
+                if e != 'Maya_Default':
+                    pm.hotkeySet(e, e=True, cu=True)
+                    LOG.info("Switched to hotkey set: " + e)
+                    break
+        else:
+            # create a duplicate
+            pm.hotkeySet('Maya_Default_Duplicate', src='Maya_Default', cu=True)
+            LOG.info("Created duplicate hotkey set: Maya_Default_Duplicate")
+
 
 def registerMenuHotkeys(menuName, hotkey, importCmd=None, preBuildCmd=None, secondaryCmd=None, annotation=None):
     """
@@ -111,6 +133,9 @@ def registerMenuHotkeys(menuName, hotkey, importCmd=None, preBuildCmd=None, seco
 
     destroyNameCmdId = namedCmdIdFmt.format("destroy", menuName)
     pm.nameCommand(destroyNameCmdId, c=destroyRtCmdId, ann=destroyRtCmdId + " Named Command")
+
+    # make sure we're in an editable hotkey set in >2017
+    _switchToNonDefaultHotkeySet()
 
     pm.hotkey(name=buildNameCmdId, **keyKwargs)
     pm.hotkey(releaseName=destroyNameCmdId, **keyKwargs)
