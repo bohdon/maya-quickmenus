@@ -1,5 +1,6 @@
 
 import os
+import logging
 
 import pymel.core as pm
 
@@ -15,13 +16,19 @@ __all__ = [
     "unregisterMenu",
 ]
 
+
+LOG = logging.getLogger("quickmenus")
+LOG.level = logging.INFO
+
+
 BUILD_MENU_CMD = """
 {preBuild}
 
 try:
     import quickmenus
     quickmenus.buildMenus('{menuName}')
-except:
+except Exception as e:
+    raise e
     {secondary}
 """
 
@@ -29,8 +36,8 @@ DESTROY_MENU_CMD = """
 try:
     import quickmenus
     wasInvoked = quickmenus.destroyMenus()
-except:
-    pass
+except Exception as e:
+    raise e
 else:
     if not wasInvoked:
         {secondary}
@@ -178,9 +185,11 @@ def buildMenus(menuName):
 
     # find any registered menus by name
     classes = getRegisteredMenus(menuName)
+    LOG.debug('Building menu classes {0}: {1}'.format(menuName, classes))
     for menuCls in classes:
         inst = menuCls()
         if inst.shouldBuild():
+            LOG.debug('Building: {0}'.format(inst))
             ACTIVE_MENUS.append(inst)
             inst.build()
 
@@ -198,6 +207,7 @@ def destroyMenus():
     global ACTIVE_MENUS
     for m in ACTIVE_MENUS:
         wasAnyInvoked = wasAnyInvoked or m.wasInvoked
+        LOG.debug('Destroying menu: {0}'.format(m))
         m.destroy()
     ACTIVE_MENUS = []
 
@@ -257,6 +267,7 @@ def getRegisteredMenus(menuName):
     global REGISTERED_MENUS
     if menuName in REGISTERED_MENUS:
         return REGISTERED_MENUS[menuName][:]
+    return []
 
 
 def getAllRegisteredMenus():
@@ -272,15 +283,25 @@ def getAllRegisteredMenus():
 class MarkingMenu(object):
     """
     The base class for any quick marking menu that can
-    be registered.
+    be registered. Provides core functionality of building
+    and destroying a popup menu appropriately.
     """
 
-    def __init__(self, menu, obj=None):
-        self.menu = pm.ui.Menu(menu)
-        self.object = obj
-        self.hit = bool(pm.mel.dagObjectHit())
+    def __init__(self):
         # variable to keep track of if this menu ever showed
         self.wasInvoked = False
+        # the panel that the popup menu will be attached to
+        self.panel = pm.getPanel(up=True)
+        # the panel type, can be used when building to determine the menu's contents
+        self.panelType = pm.getPanel(typeOf=self.panel)
+        LOG.debug("Panel: " + self.panel + ", Panel Type: " + self.panelType)
+
+        # the unique id for this popup menu, must be overridden in subclasses
+        self.popupMenuId = None
+        # the mouse button that triggers this popup menu, 1=lmb, 2=mmb, 3=rmb
+        self.mouseButton = 1
+        # when True, build menu items each time the menu is displayed
+        self.buildItemsOnShow = False
 
     def shouldBuild(self):
         """
@@ -291,13 +312,38 @@ class MarkingMenu(object):
 
     def build(self):
         """
-        Build a custom menu
+        Build the popup menu that all menu items will be attached to
         """
-        pass
+        if not self.popupMenuId:
+            raise NotImplementedError("popupMenuId must be set on MarkingMenu classes")
+        # calling destroy as a failsafe so that duplicate
+        # menus dont get created
+        self.destroy()
+        self.menu = pm.popupMenu(self.popupMenuId, b=self.mouseButton, mm=True, aob=True, parent="viewPanes")
+        self.menu.postMenuCommand(self.onMenuWillShow)
+        # if not set to build on show, build items now
+        if not self.buildItemsOnShow:
+            pm.setParent(self.menu, m=True)
+            self.buildMenuItems()
 
     def destroy(self):
         """
         Remove and destroy this menu
+        """
+        if pm.popupMenu(self.popupMenuId, q=True, ex=True):
+            pm.deleteUI(self.popupMenuId)
+
+    def onMenuWillShow(self, menu, parent):
+        self.wasInvoked = True
+        if self.buildItemsOnShow:
+            self.menu.deleteAllItems()
+            pm.setParent(self.menu, m=True)
+            self.buildMenuItems()
+
+    def buildMenuItems(self):
+        """
+        Build all menu items for the current popup menu.
+        Called each time the menu is about to be displayed.
         """
         pass
 
