@@ -4,6 +4,8 @@ import logging
 
 import pymel.core as pm
 
+import rmbmenuhook
+
 __all__ = [
     "buildMenus",
     "destroyMenus",
@@ -35,7 +37,7 @@ except Exception as e:
 DESTROY_MENU_CMD = """
 try:
     import quickmenus
-    wasInvoked = quickmenus.destroyMenus()
+    wasInvoked = quickmenus.destroyMenus('{menuName}')
 except Exception as e:
     raise e
 else:
@@ -181,20 +183,24 @@ def buildMenus(menuName):
     # perform destroy before building because sometimes
     # the release-hotkey gets skipped if the current
     # key modifiers change while the menu is active
-    destroyMenus()
+    destroyMenus(menuName)
 
     # find any registered menus by name
     classes = getRegisteredMenus(menuName)
     LOG.debug('Building menu classes {0}: {1}'.format(menuName, classes))
     for menuCls in classes:
-        inst = menuCls()
-        if inst.shouldBuild():
-            LOG.debug('Building: {0}'.format(inst))
-            ACTIVE_MENUS.append(inst)
-            inst.build()
+        if issubclass(menuCls, rmbmenuhook.Menu):
+            # for rmb menus, just register with the manager
+            rmbmenuhook.registerMenu(menuName, menuCls)
+        else:
+            inst = menuCls()
+            if inst.shouldBuild():
+                LOG.debug('Building: {0}'.format(inst))
+                ACTIVE_MENUS.append(inst)
+                inst.build()
 
 
-def destroyMenus():
+def destroyMenus(menuName):
     """
     Destroy any marking menus that are currently built.
 
@@ -210,6 +216,8 @@ def destroyMenus():
         LOG.debug('Destroying menu: {0}'.format(m))
         m.destroy()
     ACTIVE_MENUS = []
+
+    rmbmenuhook.unregisterMenu(menuName)
 
     return wasAnyInvoked
 
@@ -348,3 +356,36 @@ class MarkingMenu(object):
         pass
 
 
+
+class RMBMarkingMenu(rmbmenuhook.Menu):
+    """
+    The base class for a marking menu that uses right mouse button in a model viewport.
+    This is slightly different than the normal marking menu, because it is registered
+    with rmbmenuhook and is instanced only when invoked.
+    """
+
+    # currently using a class variable since the instance isn't
+    # available when the other menus are destroyed
+    wasInvoked = False
+
+    def __init__(self, menu, obj=None):
+        super(RMBMarkingMenu, self).__init__(menu, obj)
+        # the panel that the popup menu will be attached to
+        self.panel = pm.getPanel(up=True)
+        # the panel type, can be used when building to determine the menu's contents
+        self.panelType = pm.getPanel(typeOf=self.panel)
+
+    def build(self):
+        """
+        Build the popup menu that all menu items will be attached to
+        """
+        RMBMarkingMenu.wasInvoked = True
+        pm.setParent(self.menu, m=True)
+        self.buildMenuItems()
+
+    def buildMenuItems(self):
+        """
+        Build all menu items for the current popup menu.
+        Called each time the menu is about to be displayed.
+        """
+        pass

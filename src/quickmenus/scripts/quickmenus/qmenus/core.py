@@ -26,6 +26,7 @@ def removeHotkeys():
 def enable():
     core.registerMenu("QMenus", menus.SelectionMaskingMenu)
     core.registerMenu("QMenus", menus.DisplayMaskingMenu)
+    core.registerMenu("QMenus", menus.CameraQuickSwitchMenu)
 
 
 def disable():

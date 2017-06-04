@@ -4,15 +4,17 @@ import logging
 import pymel.core as pm
 
 from .. import core
+from .. import utils
 
 
 __all__ = [
+    'CameraQuickSwitchMenu',
     'DisplayMaskingMenu',
     'SelectionMaskingMenu',
 ]
 
 
-LOG = logging.getLogger("quickmenus")
+LOG = logging.getLogger('quickmenus')
 
 
 
@@ -102,6 +104,10 @@ class SelectionMaskingMenu(core.MarkingMenu):
 
 
 class DisplayMaskingMenu(core.MarkingMenu):
+    """
+    A radial menu for quickly changing display masking settings.
+    Only displays on model viewport panels.
+    """
 
     def __init__(self):
         super(self.__class__, self).__init__()
@@ -224,6 +230,47 @@ class DisplayMaskingMenu(core.MarkingMenu):
                     break
         return types
 
+
+
+
+
+
+class CameraQuickSwitchMenu(core.RMBMarkingMenu):
+    """
+    A radial menu that displays all cameras in the scene for easy switching.
+    """
+
+    def buildMenuItems(self):
+        # find camera
+        try:
+            camUnderPointer = pm.PyNode(pm.modelPanel(self.panel, q=True, cam=True))
+            if isinstance(camUnderPointer, pm.nt.Camera): 
+                camera = camUnderPointer
+            else:
+                camera = camUnderPointer.getShape()
+        except:
+            LOG.warning('could not find camera for panel: {0}'.format(self.panel))
+            return
+
+        menuItemCol = pm.radioMenuItemCollection()
+        isOrtho = camera.isOrtho()
+        # list same type camera in radial positions
+        similar = sorted([c for c in pm.ls(typ='camera') if c.isOrtho() == isOrtho])
+        rps = utils.getRadialMenuPositions(len(similar))
+        for cam, rp in zip(similar, rps):
+            kw = {}
+            if rp is not None:
+                kw['rp'] = rp
+            if cam == camera:
+                kw['rb'] = True
+                kw['cl'] = menuItemCol
+            pm.menuItem(l=cam.getParent(), c=pm.Callback(pm.mel.lookThroughModelPanel, str(cam), str(self.panel)), **kw)
+        if len(rps) > 8:
+            pm.menuItem(d=True)
+        # list other cameras
+        dissimilar = sorted([c for c in pm.ls(typ='camera') if c.isOrtho() != isOrtho])
+        for cam in dissimilar:
+            pm.menuItem(l=cam.getParent(), c=pm.Callback(pm.mel.lookThroughModelPanel, str(cam), str(self.panel)))
 
 
 
