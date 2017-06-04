@@ -31,10 +31,12 @@ DEFAULT_COLLECTION_NAME = "Default"
 # the name of the current quick select collection
 CURRENT_COLLECTION = None
 
+RADIAL_POSITIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+
 
 # Quick Select Core
 # -----------------
-
 
 def getAllCollections():
     """
@@ -103,7 +105,10 @@ class QuickSelectCollection(object):
         if node:
             return node
         else:
-            return pm.createNode('network', name=COLLECTION_PREFIX + self.name)
+            sel = pm.selected()
+            node = pm.createNode('network', name=COLLECTION_PREFIX + self.name)
+            pm.select(sel)
+            return node
 
     def load(self, node=None):
         if not node:
@@ -114,11 +119,15 @@ class QuickSelectCollection(object):
             self.sets = [QuickSelectSet(**kwargs) for kwargs in data.get('sets', [])]
 
     def save(self):
+        # TODO: handle locked nodes
         data = {
             'sets': [s.asDict() for s in self.sets]
         }
         node = self.getOrCreateNode()
         meta.setMetaData(node, META_CLASSNAME, data)
+
+    def isReadOnly(self):
+        return False
 
     def setName(self, newName):
         # TODO: sanitize name
@@ -129,9 +138,10 @@ class QuickSelectCollection(object):
     def addSet(self, quickSet):
         if not isinstance(quickSet, QuickSelectSet):
             raise TypeError("set must be a QuickSelectSet")
-        for s in self.sets:
-            if s.position == quickSet.position:
-                raise ValueError("cannot add a quick set, position already occupied: {0}".format(s.position))
+        if quickSet.position:
+            for s in self.sets:
+                if s.position == quickSet.position:
+                    raise ValueError("cannot add a quick set, position already occupied: {0}".format(s.position))
         self.sets.append(quickSet)
         self.save()
 
@@ -146,6 +156,10 @@ class QuickSelectCollection(object):
         if index >= 0 and index < len(self.sets):
             self.sets.pop(index)
             self.save()
+
+    def clearSets(self):
+        self.sets = []
+        self.save()
 
 
 
@@ -178,6 +192,7 @@ class QuickSelectSet(object):
         result = {
             'nodes': self.nodes,
             'title': self.title,
+            'position': self.position,
         }
         return result
 
@@ -188,6 +203,10 @@ class QuickSelectSet(object):
                 self.nodes.append(n.longName())
             else:
                 self.nodes.append(str(n))
+
+    def addNodes(self, newNodes):
+        pyNodes = [pm.PyNode(n) for n in self.nodes]
+        self.setNodes(set(pyNodes + newNodes))
 
     def abbreviate(self, nodes, maxLen=15):
         str = ', '.join([n.split('|')[-1] for n in nodes])
@@ -209,12 +228,111 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
         super(self.__class__, self).__init__()
         self.popupMenuId = 'QuickMenus_QuickSelectMenu'
         self.mouseButton = 1
+        self.collection = getDefaultCollection()
+        self.isReadOnly = self.collection.isReadOnly()
+        self.showCounts = False
 
     def shouldBuild(self):
         return self.panelType == 'modelPanel'
 
+    def getVacancies(self):
+        result = RADIAL_POSITIONS[:]
+        for s in self.collection.sets:
+            if s.position in result:
+                result.remove(s.position)
+        return result
+
     def buildMenuItems(self):
-        pass
+        # build menu items for each set
+        for i, s in enumerate(self.collection.sets):
+            itemKwargs = {
+                'l':s.getTitle(),
+            }
+            if self.showCounts:
+                itemKwargs['l'] += ' ({1})'.format(len(s))
+            if s.position:
+                itemKwargs['rp'] = s.position
+            pm.menuItem(c=pm.Callback(pm.select, s.nodes, add=True), **itemKwargs)
+            if not self.isReadOnly:
+                pm.menuItem(ob=True, c=pm.Callback(self.editSet, s, i))
+
+        # put in slots for vacancies
+        if not self.isReadOnly:
+            vacantPositions = self.getVacancies()
+            for rp in vacantPositions:
+                pm.menuItem(l='...', rp=rp, c=pm.Callback(self.addSetFromSelection, position=rp))
+            # always include slot at end of extras list
+            pm.menuItem(l='...', c=pm.Callback(self.addSetFromSelection))
+
+        # collection title
+        pm.menuItem(d=True)
+        pm.menuItem(l=self.collection.name, c=pm.Callback(self.selectAll))
+        pm.menuItem(ob=True, c=pm.Callback(self.editCollection))
+
+
+    def addSetFromSelection(self, position=None):
+        s = QuickSelectSet(pm.selected(), position=position)
+        if len(s):
+            self.collection.addSet(s)
+
+
+    def editSet(self, quickSet, quickSetIndex):
+        kw = dict(
+            t='Edit Quick Select Set:',
+            m=quickSet.getTitle(),
+            db='Cancel',
+            cb='Cancel',
+            ds='dismiss',
+            b=['Add', 'Replace', 'Rename', 'Delete', 'Cancel'],
+        )
+        action = pm.confirmDialog(**kw)
+        if action == 'Add':
+            self.addSelection(quickSet)
+        elif action == 'Replace':
+            self.replaceWithSelection(quickSet)
+        elif action == 'Rename':
+            self.renamePrompt(quickSet)
+        elif action == 'Delete':
+            self.delete(quickSetIndex)
+
+    def addSelection(self, quickSet):
+        quickSet.addNodes(pm.selected())
+        self.collection.save()
+
+    def replaceWithSelection(self, quickSet):
+        quickSet.setNodes(pm.selected())
+        self.collection.save()
+
+    def renamePrompt(self, quickSet):
+        name = promptBox('Rename Set', 'Enter a name:', 'Rename', 'Cancel', tx=quickSet['title'])
+        if name:
+            quickSet['title'] = name
+            self.collection.save()
+
+    def delete(self, quickSetIndex):
+        self.collection.removeSetAtIndex(quickSetIndex)
+
+    def selectAll(self):
+        for s in self.collection.sets:
+            s.select(add=True)
+
+    def editCollection(self):
+        kw = dict(
+            t='Edit Collection: {0}'.format(self.collection.name),
+            m='{0} set(s)'.format(len(self.collection.sets)),
+            db='Cancel',
+            cb='Cancel',
+            ds='dismiss',
+            b=['Clear All', 'Delete Collection', 'Cancel'],
+        )
+        action = pm.confirmDialog(**kw)
+        if action == 'Clear All':
+            self.collection.clearSets()
+        elif action == 'Delete Collection':
+            node = self.collection.getNode()
+            if node:
+                pm.delete(node)
+
 
 
 
