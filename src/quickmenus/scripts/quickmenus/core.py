@@ -358,7 +358,7 @@ class RMBMarkingMenu(rmbmenuhook.Menu):
     wasInvoked = False
 
     def __init__(self, menu, obj=None):
-        super(RMBMarkingMenu, self).__init__(menu, obj)
+        rmbmenuhook.Menu.__init__(self, menu, obj)
         # the panel that the popup menu will be attached to
         self.panel = pm.getPanel(up=True)
         # the panel type, can be used when building to determine the menu's contents
