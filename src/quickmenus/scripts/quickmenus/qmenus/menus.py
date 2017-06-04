@@ -3,13 +3,20 @@ import logging
 
 import pymel.core as pm
 
+try:
+    import resetter
+except:
+    resetter = None
+
 from .. import core
 from .. import utils
 
 
 __all__ = [
     'CameraQuickSwitchMenu',
+    'ComponentSelectionMaskingMenu',
     'DisplayMaskingMenu',
+    'ResetterMenu',
     'SelectionMaskingMenu',
 ]
 
@@ -273,5 +280,102 @@ class CameraQuickSwitchMenu(core.RMBMarkingMenu):
             pm.menuItem(l=cam.getParent(), c=pm.Callback(pm.mel.lookThroughModelPanel, str(cam), str(self.panel)))
 
 
+
+
+
+
+class ComponentSelectionMaskingMenu(core.MarkingMenu):
+    allkeys = [
+        'cv', 'vertex', 'subdivMeshPoint', 'latticePoint',
+        'particle', 'editPoint', 'curveParameterPoint',
+        'surfaceParameterPoint', 'puv', 'polymeshEdge',
+        'subdivMeshEdge', 'isoparm', 'surfaceEdge', 'surfaceFace',
+        'springComponent', 'facet', 'subdivMeshFace', 'hull',
+        'rotatePivot', 'scalePivot', 'jointPivot', 'selectHandle',
+        'localRotationAxis', 'imagePlane', 'surfaceUV'
+    ]
+
+
+    def __init__(self):
+        super(self.__class__, self).__init__()
+        self.popupMenuId = 'QuickMenus_ComponentSelectionMaskingMenu'
+        self.mouseButton = 1
+        self.buildItemsOnShow = True
+
+    def shouldBuild(self):
+        return self.panelType == 'modelPanel'
+
+    def buildMenuItems(self):
+        pm.menuItem(rp='N', l='Points', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['cv', 'vertex', 'subdivMeshPoint', 'latticePoint', 'particle']))
+        pm.menuItem(rp='NE', l='Handles', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['selectHandle']))
+        pm.menuItem(rp='E', l='Lines', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['polymeshEdge', 'subdivMeshEdge', 'isoparm', 'surfaceEdge', 'springComponent']))
+        pm.menuItem(rp='SE', l='Hulls', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['hull']))
+        pm.menuItem(rp='S', l='Faces', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['surfaceFace', 'facet', 'subdivMeshFace']))
+        pm.menuItem(rp='SW', l='Pivots', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['rotatePivot', 'scalePivot', 'jointPivot']))
+        pm.menuItem(rp='W', l='Param', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['editPoint', 'curveParameterPoint', 'surfaceParameterPoint', 'surfaceUV', 'puv']))
+        pm.menuItem(rp='NW', l='Misc', ecr=False, c=pm.Callback(self.setComponentSelectType, keys=['localRotationAxis', 'imagePlane']))
+
+    def setComponentSelectType(self, enabled=True, keys={}):
+        pm.selectMode(component=True)
+        kwargs = {}
+        for k in keys:
+            kwargs[k] = enabled
+        for k in self.allkeys:
+            if not kwargs.has_key(k):
+                kwargs[k] = not enabled
+        pm.selectType(**kwargs)
+
+
+
+class ResetterMenu(core.MarkingMenu):
+
+    def __init__(self):
+        super(self.__class__, self).__init__()
+        self.popupMenuId = 'QuickMenus_ResetterMenu'
+        self.mouseButton = 2
+
+    def shouldBuild(self):
+        return self.panelType == 'modelPanel'
+
+    def buildMenuItems(self):
+        self.buildSimpleItems()
+        self.buildResetterItems()
+
+    def buildSimpleItems(self):
+        pm.menuItem(rp='W', l='Rotate', ecr=True, c=pm.Callback(self.simpleReset, rot=True), ann='Reset the rotation of the selected objects')
+        pm.menuItem(rp='S', l='Translate', ecr=True, c=pm.Callback(self.simpleReset, trans=True), ann='Reset the position of the selected objects')
+        pm.menuItem(rp='E', l='Scale', ecr=True, c=pm.Callback(self.simpleReset, scale=True), ann='Reset the scale of the selected objects')
+        if not resetter:
+            # add fallback menu item if resetter is not available
+            pm.menuItem(rp='N', l='TRS', ecr=True, c=pm.Callback(self.simpleReset, trans=True, rot=True, scale=True), ann='Reset the selected objects\' transformations to identity, even if defaults are set')
+
+    def buildResetterItems(self):
+        if not resetter:
+            return
+        pm.menuItem(rp='N', l='Smart', ecr=True, c=pm.Callback(resetter.resetSmart), ann='Reset the selected objects\' attributes to the defaults, or identity if defaults are not set')
+        pm.menuItem(rp='NW', l='TRS', ecr=True, c=pm.Callback(resetter.resetTransform), ann='Reset the selected objects\' transformations to identity, even if defaults are set')
+        pm.menuItem(rp='NE', l='Defaults', ecr=True, c=pm.Callback(resetter.reset), ann='Reset the selected objects\' attributes to their defaults, does nothing if no defaults are set')
+        pm.menuItem(rp='SE', l='All Defaults', ecr=True, c=pm.Callback(resetter.resetAll), ann='Reset all objects\' attributes with defaults set to their default values')
+
+        pm.menuItem(l='Resetter', ecr=False, c=pm.Callback(resetter.GUI), ann='Open the Resetter GUI')
+        pm.menuItem(d=True)
+        pm.menuItem(l='Select Objects', ecr=True, c=pm.Callback(self.selectObjectsWithDefaults), ann='Select all objects in the scene that have attribute defaults')
+
+
+    def selectObjectsWithDefaults(self):
+        if resetter:
+            pm.select(resetter.getObjectsWithDefaults())
+
+    def simpleReset(self, trans=False, rot=False, scale=False):
+        for obj in pm.selected(typ='transform'):
+            if trans:
+                obj.t.set([0, 0, 0])
+            if rot:
+                obj.r.set([0, 0, 0])
+            if scale:
+                obj.s.set([1, 1, 1])
+
+
+        
 
 

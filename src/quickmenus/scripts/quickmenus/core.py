@@ -1,16 +1,16 @@
 
 import os
 import logging
-
 import pymel.core as pm
 
 import rmbmenuhook
+import utils
+
 
 __all__ = [
     "buildMenus",
     "destroyMenus",
     "getAllRegisteredMenus",
-    "getHotkeyKwargs",
     "getRegisteredMenus",
     "registerMenu",
     "registerMenuHotkeys",
@@ -54,33 +54,8 @@ REGISTERED_MENUS = {}
 ACTIVE_MENUS = []
 
 
-# Hotkey Utils
-# ------------
-
-def getHotkeyKwargs(keyString):
-    """
-    Return kwargs to be given to the maya `hotkey` command given a hotkey string
-
-    Args:
-        keyString: A string representing a hotkey, including modifiers, e.g. 'Alt+Shift+Q'
-    """
-    split = keyString.lower().split('+')
-    kwargs = {}
-    for s in split:
-        if s == 'alt':
-            kwargs['alt'] = True
-        elif s == 'shift':
-            kwargs['sht'] = True
-        elif s == 'ctrl':
-            kwargs['ctl'] = True
-        elif s == 'command':
-            kwargs['cmd'] = True
-        else:
-            if 'k' not in kwargs:
-                kwargs['k'] = s
-            else:
-                raise ValueError('Invalid keyString: ' + keyString)
-    return kwargs
+# Hotkey Management
+# -----------------
 
 
 def registerMenuHotkeys(menuName, hotkey, preBuildCmd=None, secondaryCmd=None, annotation=None):
@@ -100,7 +75,7 @@ def registerMenuHotkeys(menuName, hotkey, preBuildCmd=None, secondaryCmd=None, a
     # the format for named command ids
     namedCmdIdFmt = "quickMenus_{0}_{1}_nameCmd"
     # get kwargs from hotkey string
-    keyKwargs = getHotkeyKwargs(hotkey)
+    keyKwargs = utils.getHotkeyKwargs(hotkey)
 
     # shared kwargs for all runtime commands
     runTimeKwargs = {
@@ -148,7 +123,7 @@ def removeMenuHotkeys(menuName, hotkey):
     rtCmdIdFmt = "quickMenus_{0}_{1}"
     namedCmdIdFmt = "quickMenus_{0}_{1}_nameCmd"
     # get kwargs from hotkey string
-    keyKwargs = getHotkeyKwargs(hotkey)
+    keyKwargs = utils.getHotkeyKwargs(hotkey)
 
     buildRtCmdId = rtCmdIdFmt.format("build", menuName)
     if pm.runTimeCommand(buildRtCmdId, q=True, ex=True):
@@ -296,6 +271,16 @@ class MarkingMenu(object):
     """
 
     def __init__(self):
+        # use current modifiers to determine popup menu modifiers
+        isShiftPressed, isCtrlPressed, isAltPressed = utils.getModifiers()
+        self.popupKeyKwargs = {
+            'mm': True,
+            'aob': True,
+            'parent':'viewPanes',
+            'sh':isShiftPressed,
+            'ctl':isCtrlPressed,
+            'alt':isAltPressed,
+        }
         # variable to keep track of if this menu ever showed
         self.wasInvoked = False
         # the panel that the popup menu will be attached to
@@ -327,7 +312,7 @@ class MarkingMenu(object):
         # calling destroy as a failsafe so that duplicate
         # menus dont get created
         self.destroy()
-        self.menu = pm.popupMenu(self.popupMenuId, b=self.mouseButton, mm=True, aob=True, parent="viewPanes")
+        self.menu = pm.popupMenu(self.popupMenuId, b=self.mouseButton, **self.popupKeyKwargs)
         self.menu.postMenuCommand(self.onMenuWillShow)
         # if not set to build on show, build items now
         if not self.buildItemsOnShow:

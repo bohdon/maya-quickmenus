@@ -24,9 +24,12 @@ def removeHotkeys():
 
 
 def enable():
+    # TODO: would be nice to define mouse button and hotkey for each here
     core.registerMenu("QMenus", menus.SelectionMaskingMenu)
     core.registerMenu("QMenus", menus.DisplayMaskingMenu)
     core.registerMenu("QMenus", menus.CameraQuickSwitchMenu)
+    core.registerMenu("AltQMenus", menus.ComponentSelectionMaskingMenu)
+    core.registerMenu("AltQMenus", menus.ResetterMenu)
 
 
 def disable():
