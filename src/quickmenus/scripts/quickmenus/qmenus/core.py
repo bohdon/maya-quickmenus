@@ -11,11 +11,14 @@ __all__ = [
 ]
 
 def registerHotkeys():
-    preBuildCmd = "import maya.mel as mel\nmel.eval('global string $gSelect; setToolTo $gSelect;')"
+    importCmd = "import maya.mel as mel"
+    preBuildCmd = "mel.eval('global string $gSelect; setToolTo $gSelect;')"
     description = "Selection and display masking menus, as well as a camera quick switch menu"
-    core.registerMenuHotkeys("QMenus", "Q", preBuildCmd=preBuildCmd, annotation=description)
+    core.registerMenuHotkeys("QMenus", "Q", importCmd=importCmd, preBuildCmd=preBuildCmd, annotation=description)
+
     description2 = "Component selection and resetter menus"
     core.registerMenuHotkeys("AltQMenus", "Alt+Q", annotation=description2)
+
     print('Quick Menus: Q-Menu hotkeys registered')
 
 

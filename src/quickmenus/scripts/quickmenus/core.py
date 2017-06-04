@@ -23,7 +23,8 @@ LOG = logging.getLogger("quickmenus")
 LOG.level = logging.INFO
 
 
-BUILD_MENU_CMD = """{preBuild}
+BUILD_MENU_CMD = """{importCmd}
+{preBuild}
 
 try:
     import quickmenus
@@ -33,7 +34,7 @@ except Exception as e:
     {secondary}
 """
 
-DESTROY_MENU_CMD = """
+DESTROY_MENU_CMD = """{importCmd}
 
 try:
     import quickmenus
@@ -58,14 +59,14 @@ ACTIVE_MENUS = []
 # -----------------
 
 
-def registerMenuHotkeys(menuName, hotkey, preBuildCmd=None, secondaryCmd=None, annotation=None):
+def registerMenuHotkeys(menuName, hotkey, importCmd=None, preBuildCmd=None, secondaryCmd=None, annotation=None):
     """
     Setup hotkeys for builds and removing marking menus on hotkey press and release.
 
     Args:
         menuName: A string name of the menu for which to create hotkeys
-        buildCmd: A string python snippet called to build the menu
         hotkey: A string representing the hotkey to use for the menu, e.g. 'Alt+Shift+Q'
+        importCmd: String formatted python for any imports required by preBuild or secondary commands
         preBuildCmd: String formatted python that is called before building the menu
         secondaryCmd: String formatted python to be called on release if the menu is not invoked
         annotation: A string description of the menu to use when building the runTimeCommand
@@ -85,12 +86,13 @@ def registerMenuHotkeys(menuName, hotkey, preBuildCmd=None, secondaryCmd=None, a
     }
 
     # clean prebuild and secondary commands
+    importCmd = importCmd if importCmd else ""
     preBuildCmd = preBuildCmd if preBuildCmd else ""
     secondaryCmd = secondaryCmd if secondaryCmd else "pass"
 
     # create run time commands
-    buildCmd = BUILD_MENU_CMD.format(menuName=menuName, preBuild=preBuildCmd, secondary=secondaryCmd)
-    destroyCmd = DESTROY_MENU_CMD.format(menuName=menuName, preBuild=preBuildCmd, secondary=secondaryCmd)
+    buildCmd = BUILD_MENU_CMD.format(menuName=menuName, importCmd=importCmd, preBuild=preBuildCmd, secondary=secondaryCmd)
+    destroyCmd = DESTROY_MENU_CMD.format(menuName=menuName, importCmd=importCmd, preBuild=preBuildCmd, secondary=secondaryCmd)
 
     buildRtCmdId = rtCmdIdFmt.format("build", menuName)
     if pm.runTimeCommand(buildRtCmdId, q=True, ex=True):
