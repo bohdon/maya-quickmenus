@@ -23,8 +23,7 @@ LOG = logging.getLogger("quickmenus")
 LOG.level = logging.INFO
 
 
-BUILD_MENU_CMD = """
-{preBuild}
+BUILD_MENU_CMD = """{preBuild}
 
 try:
     import quickmenus
@@ -35,6 +34,7 @@ except Exception as e:
 """
 
 DESTROY_MENU_CMD = """
+
 try:
     import quickmenus
     wasInvoked = quickmenus.destroyMenus('{menuName}')

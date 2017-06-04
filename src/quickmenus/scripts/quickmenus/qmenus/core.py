@@ -16,11 +16,13 @@ def registerHotkeys():
     core.registerMenuHotkeys("QMenus", "Q", preBuildCmd=preBuildCmd, annotation=description)
     description2 = "Component selection and resetter menus"
     core.registerMenuHotkeys("AltQMenus", "Alt+Q", annotation=description2)
+    print('Quick Menus: Q-Menu hotkeys registered')
 
 
 def removeHotkeys():
     core.removeMenuHotkeys("QMenus", "Q")
     core.removeMenuHotkeys("AltQMenus", "Alt+Q")
+    print('Quick Menus: Q-Menu hotkeys removed')
 
 
 def enable():
@@ -30,7 +32,10 @@ def enable():
     core.registerMenu("QMenus", menus.CameraQuickSwitchMenu)
     core.registerMenu("AltQMenus", menus.ComponentSelectionMaskingMenu)
     core.registerMenu("AltQMenus", menus.ResetterMenu)
+    print('Quick Menus: Q-Menus enabled')
 
 
 def disable():
     core.unregisterMenu("QMenus", all=True)
+    print('Quick Menus: Q-Menus disabled')
+
