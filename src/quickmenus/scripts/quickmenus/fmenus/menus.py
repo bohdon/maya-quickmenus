@@ -362,9 +362,9 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
         self.collection.save()
 
     def renamePrompt(self, quickSet):
-        name = promptBox('Rename Set', 'Enter a name:', 'Rename', 'Cancel', tx=quickSet['title'])
+        name = promptBox('Rename Set', 'Enter a name:', 'Rename', 'Cancel', tx=quickSet.title)
         if name:
-            quickSet['title'] = name
+            quickSet.title = name
             self.collection.save()
 
     def deleteSet(self, quickSetIndex):
