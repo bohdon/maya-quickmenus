@@ -8,8 +8,8 @@ try:
 except:
     resetter = None
 
-from .. import core
-from .. import utils
+
+import quickmenus
 
 
 __all__ = [
@@ -25,7 +25,7 @@ LOG = logging.getLogger('quickmenus')
 
 
 
-class SelectionMaskingMenu(core.MarkingMenu):
+class SelectionMaskingMenu(quickmenus.MarkingMenu):
     """
     A radial menu for quickly changing selection masking settings.
     Only displays on model viewport panels.
@@ -110,7 +110,7 @@ class SelectionMaskingMenu(core.MarkingMenu):
 
 
 
-class DisplayMaskingMenu(core.MarkingMenu):
+class DisplayMaskingMenu(quickmenus.MarkingMenu):
     """
     A radial menu for quickly changing display masking settings.
     Only displays on model viewport panels.
@@ -242,7 +242,7 @@ class DisplayMaskingMenu(core.MarkingMenu):
 
 
 
-class CameraQuickSwitchMenu(core.RMBMarkingMenu):
+class CameraQuickSwitchMenu(quickmenus.RMBMarkingMenu):
     """
     A radial menu that displays all cameras in the scene for easy switching.
     """
@@ -263,7 +263,7 @@ class CameraQuickSwitchMenu(core.RMBMarkingMenu):
         isOrtho = camera.isOrtho()
         # list same type camera in radial positions
         similar = sorted([c for c in pm.ls(typ='camera') if c.isOrtho() == isOrtho])
-        rps = utils.getRadialMenuPositions(len(similar))
+        rps = quickmenus.getRadialMenuPositions(len(similar))
         for cam, rp in zip(similar, rps):
             kw = {}
             if rp is not None:
@@ -284,7 +284,7 @@ class CameraQuickSwitchMenu(core.RMBMarkingMenu):
 
 
 
-class ComponentSelectionMaskingMenu(core.MarkingMenu):
+class ComponentSelectionMaskingMenu(quickmenus.MarkingMenu):
     allkeys = [
         'cv', 'vertex', 'subdivMeshPoint', 'latticePoint',
         'particle', 'editPoint', 'curveParameterPoint',
@@ -327,7 +327,7 @@ class ComponentSelectionMaskingMenu(core.MarkingMenu):
 
 
 
-class ResetterMenu(core.MarkingMenu):
+class ResetterMenu(quickmenus.MarkingMenu):
 
     def __init__(self):
         super(self.__class__, self).__init__()

@@ -12,9 +12,11 @@ __all__ = [
     "destroyMenus",
     "getAllRegisteredMenus",
     "getRegisteredMenus",
+    "MarkingMenu",
     "registerMenu",
     "registerMenuHotkeys",
     "removeMenuHotkeys",
+    "RMBMarkingMenu",
     "unregisterMenu",
 ]
 
