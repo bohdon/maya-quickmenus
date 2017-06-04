@@ -196,6 +196,9 @@ def destroyMenus(menuName):
         m.destroy()
     ACTIVE_MENUS = []
 
+    # check RMBMarkingMenu flag for invocation
+    wasAnyInvoked = wasAnyInvoked or RMBMarkingMenu.wasInvoked
+    RMBMarkingMenu.wasInvoked = False
     rmbmenuhook.unregisterMenu(menuName)
 
     return wasAnyInvoked

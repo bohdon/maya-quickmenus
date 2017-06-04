@@ -9,8 +9,11 @@ import quickmenus
 
 
 __all__ = [
+    "createCollection",
+    "getActiveCollection",
     "getAllCollections",
     "getCollection",
+    "getCollectionNameFromNode",
     "getDefaultCollection",
     "QuickSelectCollection",
     "QuickSelectCollectionsMenu",
@@ -28,11 +31,14 @@ META_CLASSNAME = "QuickSelectCollection"
 COLLECTION_PREFIX = "quickSelectCollection_"
 # the name of the default auto-created collection
 DEFAULT_COLLECTION_NAME = "Default"
-# the name of the current quick select collection
-CURRENT_COLLECTION = None
+# the name of the active quick select collection
+ACTIVE_COLLECTION = DEFAULT_COLLECTION_NAME
 
 RADIAL_POSITIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 
+# whether to display item counts or not
+# TODO: save preference
+SHOW_COUNTS = False
 
 
 # Quick Select Core
@@ -48,16 +54,14 @@ def getAllCollections():
     # no sets, create the default one and return it in a list
     return [getDefaultCollection()]
 
-
 def getCollection(name):
     """
     Return a QuickSelectCollection from the scene by name
     """
     nodes = meta.findMetaNodes(META_CLASSNAME)
     for n in nodes:
-        if n.nodeName()[len(COLLECTION_PREFIX):] == name:
+        if getCollectionNameFromNode(n) == name:
             return QuickSelectCollection.fromNode(n)
-
 
 def getDefaultCollection():
     """
@@ -66,9 +70,44 @@ def getDefaultCollection():
     """
     coll = getCollection(DEFAULT_COLLECTION_NAME)
     if not coll:
-        coll = QuickSelectCollection(DEFAULT_COLLECTION_NAME)
-        coll.save()
+        coll = createCollection(DEFAULT_COLLECTION_NAME)
     return coll
+
+def getActiveCollection():
+    """
+    Return the currently active QuickSelectCollection from the scene.
+    If no collection is active, or the active collection is gone,
+    returns the default collection.
+    """
+    global ACTIVE_COLLECTION
+    if ACTIVE_COLLECTION is None:
+        ACTIVE_COLLECTION = DEFAULT_COLLECTION_NAME
+    coll = getCollection(ACTIVE_COLLECTION)
+    if not coll:
+        coll = getDefaultCollection()
+        ACTIVE_COLLECTION = coll.name
+    return coll
+
+def createCollection(name):
+    coll = QuickSelectCollection(name)
+    coll.save()
+    return coll
+
+def getCollectionNameFromNode(node):
+    return node.nodeName()[len(COLLECTION_PREFIX):]
+
+def promptBox(title, msg, okButton, cancelButton, tx=None):
+    prompt = pm.cmds.promptDialog(t=title, m=msg, tx=tx, b=[okButton, cancelButton])
+    if prompt != okButton:
+        return
+    return pm.cmds.promptDialog(q=True)
+
+
+def setShowCounts(newShow):
+    global SHOW_COUNTS
+    SHOW_COUNTS = bool(newShow)
+
+
 
 
 class QuickSelectCollection(object):
@@ -93,7 +132,7 @@ class QuickSelectCollection(object):
         """
         nodes = meta.findMetaNodes(META_CLASSNAME)
         for n in nodes:
-            if n.nodeName()[len(COLLECTION_PREFIX):] == self.name:
+            if getCollectionNameFromNode(n) == self.name:
                 return n
 
     def getOrCreateNode(self):
@@ -115,7 +154,7 @@ class QuickSelectCollection(object):
             node = self.getNode()
         if node:
             data = meta.getMetaData(node, META_CLASSNAME)
-            self.name = node.nodeName()[len(COLLECTION_PREFIX):]
+            self.name = getCollectionNameFromNode(node)
             self.sets = [QuickSelectSet(**kwargs) for kwargs in data.get('sets', [])]
 
     def save(self):
@@ -124,15 +163,34 @@ class QuickSelectCollection(object):
             'sets': [s.asDict() for s in self.sets]
         }
         node = self.getOrCreateNode()
+        # update name to resolve node creation differences
+        self.name = getCollectionNameFromNode(node)
         meta.setMetaData(node, META_CLASSNAME, data)
 
     def isReadOnly(self):
         return False
 
+    def isActive(self):
+        return self.name == ACTIVE_COLLECTION
+
+    def makeActive(self):
+        global ACTIVE_COLLECTION
+        ACTIVE_COLLECTION = self.name
+
+    def delete(self):
+        node = self.getNode()
+        if node:
+            pm.delete(node)
+
     def setName(self, newName):
         # TODO: sanitize name
         # TODO: make sure name is available
-        self.name = newName
+        node = self.getNode()
+        if node:
+            node.rename(COLLECTION_PREFIX + newName)
+            self.name = getCollectionNameFromNode(node)
+        else:
+            self.name = newName
         self.save()
 
     def addSet(self, quickSet):
@@ -160,6 +218,13 @@ class QuickSelectCollection(object):
     def clearSets(self):
         self.sets = []
         self.save()
+
+    def getRadialVacancies(self):
+        result = RADIAL_POSITIONS[:]
+        for s in self.sets:
+            if s.position in result:
+                result.remove(s.position)
+        return result
 
 
 
@@ -228,28 +293,22 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
         super(self.__class__, self).__init__()
         self.popupMenuId = 'QuickMenus_QuickSelectMenu'
         self.mouseButton = 1
-        self.collection = getDefaultCollection()
-        self.isReadOnly = self.collection.isReadOnly()
-        self.showCounts = False
+        self.buildItemsOnShow = True
 
     def shouldBuild(self):
         return self.panelType == 'modelPanel'
 
-    def getVacancies(self):
-        result = RADIAL_POSITIONS[:]
-        for s in self.collection.sets:
-            if s.position in result:
-                result.remove(s.position)
-        return result
-
     def buildMenuItems(self):
+        self.collection = getActiveCollection()
+        self.isReadOnly = self.collection.isReadOnly()
+
         # build menu items for each set
         for i, s in enumerate(self.collection.sets):
             itemKwargs = {
                 'l':s.getTitle(),
             }
-            if self.showCounts:
-                itemKwargs['l'] += ' ({1})'.format(len(s))
+            if SHOW_COUNTS:
+                itemKwargs['l'] += ' ({0})'.format(len(s))
             if s.position:
                 itemKwargs['rp'] = s.position
             pm.menuItem(c=pm.Callback(pm.select, s.nodes, add=True), **itemKwargs)
@@ -258,7 +317,7 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
 
         # put in slots for vacancies
         if not self.isReadOnly:
-            vacantPositions = self.getVacancies()
+            vacantPositions = self.collection.getRadialVacancies()
             for rp in vacantPositions:
                 pm.menuItem(l='...', rp=rp, c=pm.Callback(self.addSetFromSelection, position=rp))
             # always include slot at end of extras list
@@ -267,14 +326,13 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
         # collection title
         pm.menuItem(d=True)
         pm.menuItem(l=self.collection.name, c=pm.Callback(self.selectAll))
-        pm.menuItem(ob=True, c=pm.Callback(self.editCollection))
+        pm.menuItem(ob=True, c=pm.CallbackWithArgs(QuickSelectCollectionsMenu.editCollection, self.collection))
 
 
     def addSetFromSelection(self, position=None):
         s = QuickSelectSet(pm.selected(), position=position)
         if len(s):
             self.collection.addSet(s)
-
 
     def editSet(self, quickSet, quickSetIndex):
         kw = dict(
@@ -293,7 +351,7 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
         elif action == 'Rename':
             self.renamePrompt(quickSet)
         elif action == 'Delete':
-            self.delete(quickSetIndex)
+            self.deleteSet(quickSetIndex)
 
     def addSelection(self, quickSet):
         quickSet.addNodes(pm.selected())
@@ -309,30 +367,12 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
             quickSet['title'] = name
             self.collection.save()
 
-    def delete(self, quickSetIndex):
+    def deleteSet(self, quickSetIndex):
         self.collection.removeSetAtIndex(quickSetIndex)
 
     def selectAll(self):
         for s in self.collection.sets:
             s.select(add=True)
-
-    def editCollection(self):
-        kw = dict(
-            t='Edit Collection: {0}'.format(self.collection.name),
-            m='{0} set(s)'.format(len(self.collection.sets)),
-            db='Cancel',
-            cb='Cancel',
-            ds='dismiss',
-            b=['Clear All', 'Delete Collection', 'Cancel'],
-        )
-        action = pm.confirmDialog(**kw)
-        if action == 'Clear All':
-            self.collection.clearSets()
-        elif action == 'Delete Collection':
-            node = self.collection.getNode()
-            if node:
-                pm.delete(node)
-
 
 
 
@@ -340,4 +380,59 @@ class QuickSelectMenu(quickmenus.MarkingMenu):
 class QuickSelectCollectionsMenu(quickmenus.RMBMarkingMenu):
 
     def buildMenuItems(self):
-        pass
+        # header
+        pm.menuItem(l='Quick Select Collections', en=False)
+        pm.menuItem(d=True)
+
+        # list all collections
+        collections = getAllCollections()
+        collections.sort(lambda a, b: cmp(a.name, b.name))
+        for coll in collections:
+            itemKwargs = {
+                'l': coll.name,
+                'cb': coll.isActive(),
+            }
+            pm.menuItem(c=pm.Callback(coll.makeActive), **itemKwargs)
+            pm.menuItem(ob=True, c=pm.CallbackWithArgs(QuickSelectCollectionsMenu.editCollection, coll))
+
+        # new collection item
+        pm.menuItem(l='New...', itl=True, c=pm.Callback(QuickSelectCollectionsMenu.newCollectionPrompt))
+
+        # additional options
+        pm.menuItem(d=True)
+        pm.menuItem(l='Show Node Counts', cb=SHOW_COUNTS, c=pm.CallbackWithArgs(setShowCounts),
+            ann="Display node counts on menu items in the quick select menu"
+        )
+
+    @staticmethod
+    def newCollectionPrompt():
+        name = promptBox('New Quick Select Collection', 'Enter a name (camelCase):', 'Create', 'Cancel')
+        if name:
+            createCollection(name)
+
+    @staticmethod
+    def editCollection(coll, *args, **kwargs):
+        print(args, kwargs)
+        kw = dict(
+            t='Edit Collection: {0}'.format(coll.name),
+            m='{0} set(s)'.format(len(coll.sets)),
+            db='Cancel',
+            cb='Cancel',
+            ds='dismiss',
+            b=['Delete', 'Clear', 'Rename', 'Cancel'],
+        )
+        action = pm.confirmDialog(**kw)
+        if action == 'Clear':
+            coll.clearSets()
+        elif action == 'Delete':
+            coll.delete()
+        elif action == 'Rename':
+            QuickSelectCollectionsMenu.renameCollectionPrompt(coll)
+
+    @staticmethod
+    def renameCollectionPrompt(coll):
+        currentName = coll.name
+        name = promptBox('Rename Collection', 'Enter a name (camelCase):', 'Rename', 'Cancel', tx=currentName)
+        if name:
+            coll.setName(name)
+
