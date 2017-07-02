@@ -352,9 +352,8 @@ class ResetterMenu(quickmenus.MarkingMenu):
     def buildResetterItems(self):
         if not resetter:
             return
-        pm.menuItem(rp='N', l='Smart', ecr=True, c=pm.Callback(resetter.resetSmart), ann='Reset the selected objects\' attributes to the defaults, or identity if defaults are not set')
-        pm.menuItem(rp='NW', l='TRS', ecr=True, c=pm.Callback(resetter.resetTransform), ann='Reset the selected objects\' transformations to identity, even if defaults are set')
-        pm.menuItem(rp='NE', l='Defaults', ecr=True, c=pm.Callback(resetter.reset), ann='Reset the selected objects\' attributes to their defaults, does nothing if no defaults are set')
+        pm.menuItem(rp='N', l='Smart', ecr=True, c=pm.Callback(resetter.reset), ann='Reset the selected objects\' attributes to the defaults, or identity if defaults are not set')
+        pm.menuItem(rp='NE', l='Defaults', ecr=True, c=pm.CallbackWithArgs(resetter.reset, useBasicDefaults=False), ann='Reset the selected objects\' attributes to their defaults, does nothing if no defaults are set')
         pm.menuItem(rp='SE', l='All Defaults', ecr=True, c=pm.Callback(resetter.resetAll), ann='Reset all objects\' attributes with defaults set to their default values')
 
         pm.menuItem(l='Resetter', ecr=False, c=pm.Callback(resetter.GUI), ann='Open the Resetter GUI')
