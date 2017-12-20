@@ -1,5 +1,6 @@
 #! /bin/bash
 
+PROJECT_NAME="maya-quickmenus"
 PACKAGE_NAME="quickmenus"
 
 
@@ -20,6 +21,15 @@ build() {
     mkdir -p build
     cp -R src/$PACKAGE_NAME build/
     cp -R src/$PACKAGE_NAME.mod build/
+}
+
+release() {
+    clean
+    build
+    VERSION=`git describe --tags --abbrev=0`
+    cd build
+    zip -rX ${PROJECT_NAME}_${VERSION}.zip *
+    echo ${PROJECT_NAME}_${VERSION}.zip
 }
 
 clean() {
