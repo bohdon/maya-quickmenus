@@ -52,3 +52,7 @@ quickmenus.fmenus.registerHotkeys()
 ```
 
 NOTE: in Maya 2017, some issues still exist with custom Hotkey sets, and you may have to run this each session
+
+
+## Version 1.0.0 (2017-12-19)
+- Initial release
