@@ -30,12 +30,15 @@ Q-menus are a set of selection and display related marking menus. Menus include 
 
 ## Installation
 
-Download the [latest release](https://github.com/bohdon/maya-quickmenus/releases/latest) and unzip the contents into your `/maya/modules` folder. You may have to create the `modules` folder if it doesn't already exist.
+Download the [latest release](https://github.com/bohdon/maya-quickmenus/releases/latest) and unzip the contents into your `maya/modules` folder. You may have to create the folder if it doesn't already exist.
 - Windows: `C:/Users/<user>/Documents/maya/modules`
 - Mac: `/Users/<user>/Library/Preferences/Autodesk/maya/modules`
 
-Add the following to `userSetup.py`:
+Then add the following to your `userSetup.py` file. You may have to create the file as a new text document if it doesn't already exist.
+- Windows: `C:/Users/<user>/Documents/maya/scripts/userSetup.py`
+- Mac: `/Users/<user>/Library/Preferences/Autodesk/maya/scripts/userSetup.py`
 
+**userSetup.py:**
 ```python
 # enable RMB Marking Menu Hook
 import rmbmenuhook
@@ -47,7 +50,7 @@ quickmenus.qmenus.enable()
 quickmenus.fmenus.enable()
 ```
 
-A one-time setup is required for registering the hotkeys, run this in the Script Editor:
+After launching Maya, a first-time setup is required for registering the hotkeys, run this python script in the Script Editor:
 
 ```python
 # register Quick Menu hotkeys
