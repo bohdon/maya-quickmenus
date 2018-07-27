@@ -37,6 +37,10 @@ Download the [latest release](https://github.com/bohdon/maya-quickmenus/releases
 Add the following to `userSetup.py`:
 
 ```python
+# enable RMB Marking Menu Hook
+import rmbmenuhook
+rmbmenuhook.enable()
+
 # enable Quick Menus
 import quickmenus
 quickmenus.qmenus.enable()
