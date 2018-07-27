@@ -30,9 +30,9 @@ Q-menus are a set of selection and display related marking menus. Menus include 
 
 ## Installation
 
-**Requires [maya-rmbmenuhook](https://github.com/bohdon/maya-rmbmenuhook)**
-
-Download the [latest release](https://github.com/bohdon/maya-quickmenus/releases/latest) and unzip the contents into your `~/Documents/maya/modules` folder.
+Download the [latest release](https://github.com/bohdon/maya-quickmenus/releases/latest) and unzip the contents into your `/maya/modules` folder. You may have to create the `modules` folder if it doesn't already exist.
+- Windows: `C:/Users/<user>/Documents/maya/modules`
+- Mac: `/Users/<user>/Library/Preferences/Autodesk/maya/modules`
 
 Add the following to `userSetup.py`:
 
@@ -56,6 +56,10 @@ quickmenus.fmenus.registerHotkeys()
 ```
 
 NOTE: in Maya 2017, some issues still exist with custom Hotkey sets, and you may have to run this each session
+
+The quickmenus release also includes releases for these packages
+- [maya-pymetanode](https://github.com/bohdon/maya-pymetanode)
+- [maya-rmbmenuhook](https://github.com/bohdon/maya-rmbmenuhook)
 
 
 ## Version 1.0.0 (2017-12-19)
