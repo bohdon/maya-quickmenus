@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> This project was moved into [maya-workflowtools](https://github.com/bohdon/maya-workflowtools)
+
 # Maya Quick Menus
 
 A set of marking menus for making common tasks more eficient.
